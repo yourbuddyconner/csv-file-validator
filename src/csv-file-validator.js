@@ -45,13 +45,13 @@
 	 * @param {Object} config
 	 * @private
 	 */
-	function _prepareDataAndValidateFile(csvData, config) {
+	async function _prepareDataAndValidateFile(csvData, config) {
 		const file = {
 			inValidData: [],
 			data: []
 		};
 
-		csvData.forEach(function (row, rowIndex) {
+		for (const [rowIndex, row] of csvData.entries()) {
 			const columnData = {};
 
 			// fields are mismatch
@@ -74,7 +74,7 @@
 				})
 			}
 
-			row.forEach(function (columnValue, index) {
+			const columnPromises = row.map(async (columnValue, index) => {
 				const valueConfig = config.headers[index];
 				const columnIndex = (config.isColumnIndexAlphabetic)
 					? _convertColumnNumberToLetter(index + 1)
@@ -116,23 +116,28 @@
 							? valueConfig.requiredError(valueConfig.name, rowIndex + 1, columnIndex)
 							: String(valueConfig.name + ' is required in the ' + (rowIndex + 1) + ' row / ' + (columnIndex) + ' column')
 					});
-				} else if (valueConfig.validate && !valueConfig.validate(columnValue)) {
-					file.inValidData.push({
-						rowIndex: rowIndex + 1,
-						columnIndex: columnIndex,
-						message: _isFunction(valueConfig.validateError)
-							? valueConfig.validateError(valueConfig.name, rowIndex + 1, columnIndex)
-							: String(valueConfig.name + ' is not valid in the ' + (rowIndex + 1) + ' row / ' + (columnIndex) + ' column')
-					});
-				} else if (valueConfig.dependentValidate &&
-					!valueConfig.dependentValidate(columnValue, _getClearRow(row))) {
-					file.inValidData.push({
-						rowIndex: rowIndex + 1,
-						columnIndex: columnIndex,
-						message: _isFunction(valueConfig.validateError)
-							? valueConfig.validateError(valueConfig.name, rowIndex + 1, columnIndex)
-							: String(valueConfig.name + ' not passed dependent validation in the ' + (rowIndex + 1) + ' row / ' + (columnIndex + 1) + ' column')
-					});
+				} else if (valueConfig.validate) {
+					const isValid = await valueConfig.validate(columnValue);
+					if (!isValid) {
+						file.inValidData.push({
+							rowIndex: rowIndex + 1,
+							columnIndex: columnIndex,
+							message: _isFunction(valueConfig.validateError)
+								? valueConfig.validateError(valueConfig.name, rowIndex + 1, columnIndex)
+								: String(valueConfig.name + ' is not valid in the ' + (rowIndex + 1) + ' row / ' + (columnIndex) + ' column')
+						});
+					}
+				} else if (valueConfig.dependentValidate) {
+					const isValid = await valueConfig.dependentValidate(columnValue, _getClearRow(row));
+					if (!isValid) {
+						file.inValidData.push({
+							rowIndex: rowIndex + 1,
+							columnIndex: columnIndex,
+							message: _isFunction(valueConfig.validateError)
+								? valueConfig.validateError(valueConfig.name, rowIndex + 1, columnIndex)
+								: String(valueConfig.name + ' not passed dependent validation in the ' + (rowIndex + 1) + ' row / ' + (columnIndex + 1) + ' column')
+						});
+					}
 				}
 				if (valueConfig.optional) {
 					columnData[valueConfig.inputName] = columnValue;
@@ -147,10 +152,12 @@
 				}
 			});
 
+			await Promise.all(columnPromises);
+
 			if (Object.keys(columnData).length) {
 				file.data.push(columnData);
 			}
-		});
+		}
 
 		_checkUniqueFields(file, config);
 
@@ -253,3 +260,4 @@
 
 	return CSVFileValidator;
 })));
+ 

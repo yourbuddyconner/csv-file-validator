@@ -48,13 +48,13 @@ export interface FieldSchema {
 	 * Validate column value.
 	 * Must return true for valid field and false for invalid.
 	 */
-	validate?: (field: string|number|boolean) => boolean;
+	validate?: (field: string|number|boolean) => Promise<boolean>;
 
 	/**
 	 * Validate column value that depends on other values in other columns.
 	 * Must return true for valid field and false for invalid.
 	 */
-	dependentValidate?: (field: string, row: [string]) => boolean;
+	dependentValidate?: (field: string, row: [string]) => Promise<boolean>;
 
 	/**
 	 * If validate returns false validateError function
